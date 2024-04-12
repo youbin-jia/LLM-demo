@@ -17,6 +17,9 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.documents import Document
 from langchain.chains import create_retrieval_chain
+from langchain.chains import create_history_aware_retriever
+from langchain_core.prompts import MessagesPlaceholder
+from langchain_core.messages import HumanMessage, AIMessage
 
 
 
@@ -34,8 +37,8 @@ class MyAgent:
             print("user_message is None !")
             return False
         prompt = ChatPromptTemplate.from_messages([
-            ("system", self.system_prompt),
-            ("user", user_message)
+            ("system", "{system_prompt}"),
+            ("user", "{user_message}")
         ])
         
         chain = prompt | self.llm
@@ -87,8 +90,8 @@ class MyAgent:
         if logprobs is not None:
             print("{:<20}:{:4}{:<50}".format("logprobs", " ", logprobs))
         return True;
-            
-    def Retrieval(self, user_message):
+
+    def GetRetriever(self):
         loader = WebBaseLoader("https://docs.smith.langchain.com/user_guide")
         docs = loader.load()
         
@@ -97,7 +100,11 @@ class MyAgent:
         text_splitter = RecursiveCharacterTextSplitter()
         documents = text_splitter.split_documents(docs)
         vector = FAISS.from_documents(documents, embeddings)
+        return vector.as_retriever()
         
+            
+    def Retrieval(self, user_message):
+        retriever = self.GetRetriever()
         prompt = ChatPromptTemplate.from_template("""Answer the following question based only on the provided context:
             <context>
             {context}
@@ -106,37 +113,99 @@ class MyAgent:
             Question: {input}""")
 
         document_chain = create_stuff_documents_chain(self.llm, prompt)
+        self.ShowUser(user_message)
         # gpt_message = document_chain.invoke({
         #        "input": user_message,
         #        "context": [Document(page_content="langsmith can let you visualize test results")]
         #     })
+        # self.ShowGPT(gpt_message)
         
-        retriever = vector.as_retriever()
+       
         retrieval_chain = create_retrieval_chain(retriever, document_chain)
         response = retrieval_chain.invoke({"input": user_message})
-        
-        self.ShowUser(user_message)
         self.ShowGPT(response["answer"])
         return True
 
-
-
+    def Conversation(self, user_message, verbose=False):
+        retriever = self.GetRetriever()
+        prompt = ChatPromptTemplate.from_messages([
+                MessagesPlaceholder(variable_name="chat_history"),
+                ("user", "{input}"),
+                ("user", "Given the above conversation, generate a search query to look up to get information relevant to the conversation") #????
+            ])
+        retriever_chain = create_history_aware_retriever(self.llm, retriever, prompt)
+        
+        self.ShowUser(user_message)
+        
+        # chat_history = [HumanMessage(content="Can LangSmith help test my LLM applications?"), AIMessage(content="Yes!")]
+        # documents = retriever_chain.invoke({
+        #         "chat_history": chat_history,
+        #         "input": user_message
+        #     })
+        
+        # self.ShowDocuments(documents, verbose)
+        
+        
+        prompt = ChatPromptTemplate.from_messages([
+                ("system", "Answer the user's questions based on the below context:\n\n{context}"),
+                MessagesPlaceholder(variable_name="chat_history"),
+                ("user", "{input}"),
+            ])
+        document_chain = create_stuff_documents_chain(self.llm, prompt)
+        
+        retrieval_chain = create_retrieval_chain(retriever_chain, document_chain)
+        chat_history = [HumanMessage(content="Can LangSmith help test my LLM applications?"), AIMessage(content="Yes!")]
+        gpt_message = retrieval_chain.invoke({
+                "chat_history": chat_history,
+                "input":  user_message
+            })
+        self.ShowGPT(gpt_message)
+        
+        
+    def ShowDocuments(self, documents, verbose=False):
+         doc_str = ""
+         for doc in documents:
+             doc_str = doc_str + self.StrDocument(doc, verbose)
+         self.ShowGPT(doc_str)
+         
+    def StrDocument(self, doc, verbose=False):
+        text = doc.page_content
+        metadata = doc.metadata
+        doc_str = text
+        verbose_str = ""
+        if verbose:
+            verbose_str = "\n\n***********************verbose******************" + \
+                   "\n  title : " + metadata["source"] + \
+                   "\n  source : " + metadata["title"] + \
+                   "\n  description : " + metadata["description"] + \
+                   "\n  language : " + metadata["language"] + \
+                   "\n************************************************\n\n"
+               
+        return doc_str + verbose_str
+         
+         
+         
+         
+         
+         
 def Run(operation):
     agent = MyAgent()
     
     
     chat_message = "how can langsmith help with testing?"
     retrieval_message = "how can langsmith help with testing ?"
-    
+    conversation_message = "Tell me how"
     
     
     messages = {
         "Chat": chat_message,
-        "Retrieval": retrieval_message
+        "Retrieval": retrieval_message,
+        "Conversation" : conversation_message
     }
     operations = {
         "Chat": agent.Chat,
-        "Retrieval": agent.Retrieval
+        "Retrieval": agent.Retrieval,
+        "Conversation": agent.Conversation
     }
     
     message = messages.get(operation, None)
@@ -157,7 +226,7 @@ def main():
         #print(param1)
     
     
-    operation = "Retrieval"
+    operation = "Conversation"
     
     Run(operation)
 
