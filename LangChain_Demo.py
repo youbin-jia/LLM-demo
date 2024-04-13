@@ -5,6 +5,7 @@ Created on Tue Apr  9 16:59:58 2024
 
 @author: jyb
 """
+import os
 import sys
 import pytest
 from langchain_openai import ChatOpenAI
@@ -20,6 +21,13 @@ from langchain.chains import create_retrieval_chain
 from langchain.chains import create_history_aware_retriever
 from langchain_core.prompts import MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
+from langchain.tools.retriever import create_retriever_tool
+from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_openai import ChatOpenAI
+from langchain import hub
+from langchain.agents import create_openai_functions_agent
+from langchain.agents import AgentExecutor
+
 
 
 
@@ -161,6 +169,32 @@ class MyAgent:
             })
         self.ShowGPT(gpt_message)
         
+    def Agent(self, user_message, verbose = True):
+        retriever = self.GetRetriever()
+        retriever_tool = create_retriever_tool(
+                retriever,
+                "langsmith_search",
+                "Search for information about LangSmith. For any questions about LangSmith, you must use this tool!",
+            )
+        search = TavilySearchResults()
+        tools = [retriever_tool, search]
+        
+        # Get the prompt to use - you can modify this!
+        prompt = hub.pull("hwchase17/openai-functions-agent")
+        
+        agent = create_openai_functions_agent(self.llm, tools, prompt)
+        agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=verbose)
+        
+        chat_history = [HumanMessage(content="Can LangSmith help test my LLM applications?"), AIMessage(content="Yes!")]
+        agent_executor.invoke({
+                "chat_history": chat_history,
+                "input": user_message
+            })
+        
+        
+        
+        
+        
         
     def ShowDocuments(self, documents, verbose=False):
          doc_str = ""
@@ -195,17 +229,19 @@ def Run(operation):
     chat_message = "how can langsmith help with testing?"
     retrieval_message = "how can langsmith help with testing ?"
     conversation_message = "Tell me how"
-    
+    agent_message = "Tell me how"
     
     messages = {
         "Chat": chat_message,
         "Retrieval": retrieval_message,
-        "Conversation" : conversation_message
+        "Conversation" : conversation_message,
+        "Agent" : agent_message
     }
     operations = {
         "Chat": agent.Chat,
         "Retrieval": agent.Retrieval,
-        "Conversation": agent.Conversation
+        "Conversation": agent.Conversation,
+        "Agent": agent.Agent
     }
     
     message = messages.get(operation, None)
@@ -224,9 +260,9 @@ def main():
     if len(args) > 0:
         param1 = str(args[0])
         #print(param1)
+
     
-    
-    operation = "Conversation"
+    operation = "Agent"
     
     Run(operation)
 
