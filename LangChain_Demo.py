@@ -28,6 +28,7 @@ from langchain import hub
 from langchain.agents import create_openai_functions_agent
 from langchain.agents import AgentExecutor
 
+tavily_api_key = "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"
 
 
 
@@ -39,6 +40,12 @@ class MyAgent:
                               temperature = temperature)
         
         self.system_prompt = "You are world class technical documentation writer."
+        self.operations = {
+            "Chat": self.Chat,
+            "Retrieval": self.Retrieval,
+            "Conversation": self.Conversation,
+            "Agent": self.Agent
+        }
         
     def Chat(self, user_message, verbose=False):
         if user_message is None:
@@ -61,12 +68,12 @@ class MyAgent:
         
         
     def ShowUser(self, user_message):
-        print("#USER# :<<")
+        print("\n #USER# :<<")
         print(user_message, "\n\n")
         return True
     
     def ShowGPT(self, gpt_message):
-        print("#GPT# :>>")
+        print("\n #GPT# :>>")
         print(gpt_message)
         return True
 
@@ -180,16 +187,22 @@ class MyAgent:
         tools = [retriever_tool, search]
         
         # Get the prompt to use - you can modify this!
-        prompt = hub.pull("hwchase17/openai-functions-agent")
+        agent_prompt = hub.pull("hwchase17/openai-functions-agent")
         
-        agent = create_openai_functions_agent(self.llm, tools, prompt)
+        #print("agent prompt : \n", agent_prompt)
+        
+        agent = create_openai_functions_agent(self.llm, tools, agent_prompt)
         agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=verbose)
         
         chat_history = [HumanMessage(content="Can LangSmith help test my LLM applications?"), AIMessage(content="Yes!")]
-        agent_executor.invoke({
+        agent_message = agent_executor.invoke({
                 "chat_history": chat_history,
                 "input": user_message
             })
+        print(type(agent_message))
+        self.ShowUser(user_message)
+        self.ShowGPT(agent_message)
+        
         
         
         
@@ -222,34 +235,12 @@ class MyAgent:
          
          
          
-def Run(operation):
-    agent = MyAgent()
-    
-    
-    chat_message = "how can langsmith help with testing?"
-    retrieval_message = "how can langsmith help with testing ?"
-    conversation_message = "Tell me how"
-    agent_message = "Tell me how"
-    
-    messages = {
-        "Chat": chat_message,
-        "Retrieval": retrieval_message,
-        "Conversation" : conversation_message,
-        "Agent" : agent_message
-    }
-    operations = {
-        "Chat": agent.Chat,
-        "Retrieval": agent.Retrieval,
-        "Conversation": agent.Conversation,
-        "Agent": agent.Agent
-    }
-    
-    message = messages.get(operation, None)
-    func = operations.get(operation, None)
-    if func:
-        return func(message)
-    else:
-        return "Unsupported operation"
+    def Run(self, operation, message):
+        func = self.operations.get(operation, None)
+        if func:
+            return func(message)
+        else:
+            return "Unsupported operation"
 
         
 def main():
@@ -261,10 +252,25 @@ def main():
         param1 = str(args[0])
         #print(param1)
 
+    agent = MyAgent()
     
-    operation = "Agent"
+    agent_type = input("Agent Type : ")
+     
+    messages = {
+        "Chat": "how can langsmith help with testing?",
+        "Retrieval": "how can langsmith help with testing?",
+        "Conversation" : "Tell me how",
+        "Agent" : "Tell me how"
+    }
     
-    Run(operation)
+    if agent_type in agent.operations:
+        message = input("user input : ")
+        if message == "default":
+            message = messages.get(agent_type, "")
+        if message == "":
+            print("user input empty !")
+            return True
+        agent.Run(agent_type, message)
 
     
     
