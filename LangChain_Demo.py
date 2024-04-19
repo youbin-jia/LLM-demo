@@ -33,9 +33,21 @@ from langchain import hub
 from langchain.agents import create_openai_functions_agent, create_react_agent
 from langchain.agents import AgentExecutor
 
-from gaode_navigation import route_planning
+from gaode_navigation import route_planning, search_nearby
 
 tavily_api_key = "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"
+
+
+class SearchNearbyInput(BaseModel):
+    keywords: str = Field(description="Search for nearby keywords and select target POI based on keywords")
+    location: str = Field(description="Center point of nearby POI search")
+
+
+def SearchNearby(keywords: str, location: str) -> str:
+    ''' Search for surrounding/nearby target POI based on the center point and keywords '''
+    print("keywords : ", keywords, "\nlocation : ", location)
+    result = search_nearby(keywords, location)
+    return result
 
 
 
@@ -162,6 +174,7 @@ class MyAgent:
 
     def Conversation(self, user_message, verbose=False):
         retriever = self.GetRetriever()
+        
         prompt = ChatPromptTemplate.from_messages([
                 MessagesPlaceholder(variable_name="chat_history"),
                 ("user", "{input}"),
@@ -225,6 +238,15 @@ class MyAgent:
         
     def Navigation(self, user_message, verbose = True):
         search = TavilySearchResults(max_results=1)
+        
+        directions = StructuredTool.from_function(
+            func=SearchNearby,
+            name="SearchNearby",
+            description="Search for surrounding/nearby target POI based on the center point and keywords",
+            args_schema=SearchNearbyInput,
+            return_direct=False,
+            # coroutine= ... <- you can specify an async method if desired as well
+        )
         
         directions = StructuredTool.from_function(
             func=GetDirections,
@@ -315,9 +337,10 @@ def main():
         "Conversation" : "Tell me how",
         "Agent" : "Tell me how",    
         "Navigation" : '''
-                        我想去南京站，请帮我导航, 并且搜索附近的酒店, 并给出南京站到酒店的导航
-                        首先导航去南京站的路线, 然后搜索南京站附近的酒店给出酒店名
-                        最后给出从南京站到第1个酒店的导航,最终给出导航的消息信息
+                        我想去南京站，请帮我导航, 并且搜索附近的酒店和饭店, 给出导航的详细信息；
+                        首先导航去目的地的路线；
+                        然后搜索目的地附近的酒店给出酒店和饭店名（必须用中文），并给出接下来的去那里的导航路线；
+                        最终给出导航的详细信息，包含所有的导航信息，包含tool工具返回的原始信息。
                         '''
     }
     
