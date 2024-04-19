@@ -8,6 +8,11 @@ Created on Tue Apr  9 16:59:58 2024
 import os
 import sys
 import pytest
+import requests
+
+from langchain.pydantic_v1 import BaseModel, Field
+from langchain.tools import BaseTool, StructuredTool, tool
+from langchain_openai import OpenAI
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -20,17 +25,30 @@ from langchain_core.documents import Document
 from langchain.chains import create_retrieval_chain
 from langchain.chains import create_history_aware_retriever
 from langchain_core.prompts import MessagesPlaceholder
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain.tools.retriever import create_retriever_tool
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_openai import ChatOpenAI
 from langchain import hub
-from langchain.agents import create_openai_functions_agent
+from langchain.agents import create_openai_functions_agent, create_react_agent
 from langchain.agents import AgentExecutor
+
+from gaode_navigation import route_planning
 
 tavily_api_key = "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"
 
 
+
+class GetDirectionsInput(BaseModel):
+    origin: str = Field(description="The first string parameter represents the origin")
+    destination: str = Field(description="The second string parameter represents the destination")
+
+
+def GetDirections(origin: str, destination: str) -> str:
+    ''' Get directions from a given origin to a destination using a map service. '''
+    print("origin : ", origin, "\ndestination : ", destination)
+    result = route_planning(origin, destination)
+    return result
 
 class MyAgent:
     def __init__(self, model_name = "gpt-3.5-turbo", temperature = 0):
@@ -44,7 +62,8 @@ class MyAgent:
             "Chat": self.Chat,
             "Retrieval": self.Retrieval,
             "Conversation": self.Conversation,
-            "Agent": self.Agent
+            "Agent": self.Agent,
+            "Navigation": self.Navigation
         }
         
     def Chat(self, user_message, verbose=False):
@@ -146,7 +165,7 @@ class MyAgent:
         prompt = ChatPromptTemplate.from_messages([
                 MessagesPlaceholder(variable_name="chat_history"),
                 ("user", "{input}"),
-                ("user", "Given the above conversation, generate a search query to look up to get information relevant to the conversation") #????
+                ("user", "Given the above conversation, generate a search query to look up to get information relevant to the conversation") 
             ])
         retriever_chain = create_history_aware_retriever(self.llm, retriever, prompt)
         
@@ -199,14 +218,51 @@ class MyAgent:
                 "chat_history": chat_history,
                 "input": user_message
             })
-        print(type(agent_message))
+        #print(type(agent_message))
+        
         self.ShowUser(user_message)
         self.ShowGPT(agent_message)
         
+    def Navigation(self, user_message, verbose = True):
+        search = TavilySearchResults(max_results=1)
+        
+        directions = StructuredTool.from_function(
+            func=GetDirections,
+            name="GetDirections",
+            description="Get directions from a given origin to a destination using a map service",
+            args_schema=GetDirectionsInput,
+            return_direct=False,
+            # coroutine= ... <- you can specify an async method if desired as well
+        )
+        tools = [search, directions]
+        
+        # Get the prompt to use - you can modify this!
+        #prompt = hub.pull("hwchase17/react")
+        prompt = hub.pull("hwchase17/openai-tools-agent")
         
         
         
+
+        # Choose the LLM to use
+        #llm = OpenAI()
+        agent =  create_openai_functions_agent(self.llm, tools, prompt)
+        #agent =  create_react_agent(self.llm, tools, prompt)
+        agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
         
+        chat_history = [SystemMessage(content="You are a self driving route planning assistant "
+                                              "who needs to plan the most reasonable driving "
+                                              "route based on the starting point and destination,"
+                                              "and can only consider self driving routes"),
+                        HumanMessage(content="我在南京南站"),
+                        AIMessage(content="OK")]
+        response = agent_executor.invoke({
+                "chat_history": chat_history,
+                "input": user_message
+            })
+        #print(type(agent_message))
+        
+        self.ShowUser(user_message)
+        self.ShowGPT(response["output"])
         
         
     def ShowDocuments(self, documents, verbose=False):
@@ -230,11 +286,6 @@ class MyAgent:
                
         return doc_str + verbose_str
          
-         
-         
-         
-         
-         
     def Run(self, operation, message):
         func = self.operations.get(operation, None)
         if func:
@@ -254,17 +305,23 @@ def main():
 
     agent = MyAgent()
     
-    agent_type = input("Agent Type : ")
-     
+    agent_type = "Navigation"
+    message = "default"
+    
+    
     messages = {
         "Chat": "how can langsmith help with testing?",
         "Retrieval": "how can langsmith help with testing?",
         "Conversation" : "Tell me how",
-        "Agent" : "Tell me how"
+        "Agent" : "Tell me how",    
+        "Navigation" : '''
+                        我想去南京站，请帮我导航, 并且搜索附近的酒店, 并给出南京站到酒店的导航
+                        首先导航去南京站的路线, 然后搜索南京站附近的酒店给出酒店名
+                        最后给出从南京站到第1个酒店的导航,最终给出导航的消息信息
+                        '''
     }
     
     if agent_type in agent.operations:
-        message = input("user input : ")
         if message == "default":
             message = messages.get(agent_type, "")
         if message == "":
