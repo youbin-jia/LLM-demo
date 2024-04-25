@@ -9,6 +9,7 @@ import os
 import sys
 import pytest
 import requests
+import traceback
 
 from langchain.pydantic_v1 import BaseModel, Field
 from langchain.tools import BaseTool, StructuredTool, tool
@@ -34,6 +35,20 @@ from langchain.agents import create_openai_functions_agent, create_react_agent
 from langchain.agents import AgentExecutor
 
 from gaode_navigation import route_planning, search_nearby
+
+
+class Color:
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    GREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+
+
 
 tavily_api_key = "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"
 
@@ -99,12 +114,12 @@ class MyAgent:
         
         
     def ShowUser(self, user_message):
-        print("\n #USER# :<<")
+        print(Color.GREEN + "\n #USER# :<<" + Color.ENDC)
         print(user_message, "\n\n")
         return True
     
     def ShowGPT(self, gpt_message):
-        print("\n #GPT# :>>")
+        print(Color.GREEN + "\n #GPT# :>>" + Color.ENDC)
         print(gpt_message)
         return True
 
@@ -239,7 +254,7 @@ class MyAgent:
     def Navigation(self, user_message, verbose = True):
         search = TavilySearchResults(max_results=1)
         
-        directions = StructuredTool.from_function(
+        searchnearby = StructuredTool.from_function(
             func=SearchNearby,
             name="SearchNearby",
             description="Search for surrounding/nearby target POI based on the center point and keywords",
@@ -256,11 +271,12 @@ class MyAgent:
             return_direct=False,
             # coroutine= ... <- you can specify an async method if desired as well
         )
-        tools = [search, directions]
+        tools = [directions, search]
         
         # Get the prompt to use - you can modify this!
         #prompt = hub.pull("hwchase17/react")
         prompt = hub.pull("hwchase17/openai-tools-agent")
+        #print(prompt['template'])
         
         
         
@@ -270,13 +286,19 @@ class MyAgent:
         agent =  create_openai_functions_agent(self.llm, tools, prompt)
         #agent =  create_react_agent(self.llm, tools, prompt)
         agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+        #traceback.print_stack()
         
-        chat_history = [SystemMessage(content="You are a self driving route planning assistant "
-                                              "who needs to plan the most reasonable driving "
-                                              "route based on the starting point and destination,"
-                                              "and can only consider self driving routes"),
+        chat_history = [SystemMessage(content='''
+                                              You are a self driving route planning assistant 
+                                              who needs to plan the most reasonable driving 
+                                              route based on the starting point and destination,
+                                              and can only consider self driving routes,
+                                              Finally, provide detailed navigation information, 
+                                              The navigation route needs to include all found locations
+                                              including the raw information returned by the tool/function called.
+                                              '''),
                         HumanMessage(content="我在南京南站"),
-                        AIMessage(content="OK")]
+                        AIMessage(content="好的")]
         response = agent_executor.invoke({
                 "chat_history": chat_history,
                 "input": user_message
@@ -336,12 +358,7 @@ def main():
         "Retrieval": "how can langsmith help with testing?",
         "Conversation" : "Tell me how",
         "Agent" : "Tell me how",    
-        "Navigation" : '''
-                        我想去南京站，请帮我导航, 并且搜索附近的酒店和饭店, 给出导航的详细信息；
-                        首先导航去目的地的路线；
-                        然后搜索目的地附近的酒店给出酒店和饭店名（必须用中文），并给出接下来的去那里的导航路线；
-                        最终给出导航的详细信息，包含所有的导航信息，包含tool工具返回的原始信息。
-                        '''
+        "Navigation" : "请帮忙导航到南京站，并寻找南京站附近的酒店和餐厅"
     }
     
     if agent_type in agent.operations:
@@ -351,7 +368,6 @@ def main():
             print("user input empty !")
             return True
         agent.Run(agent_type, message)
-
     
     
 if __name__ == "__main__":

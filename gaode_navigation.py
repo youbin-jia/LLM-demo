@@ -29,6 +29,8 @@ def search_nearby(keywords, location = '', radius=5000):
     }
     response = requests.get(url, params=params)
     data = response.json()
+    if data['info'] == 'INVALID_PARAMS':
+        return None
     first_poi = None
     for poi in data['pois']:
         print(poi['name'], poi['address'])
@@ -51,7 +53,7 @@ def get_location_x_y(place):
     if (data["info"] != "OK"):
         return None
     location = data["geocodes"][0]['location']
-    #print(place, "->location : " ,location)
+    print(place, "->location : " ,location)
     return location
 
 def get_route_frome_reponse(response):
@@ -101,13 +103,15 @@ def route_planning(from_place : str, to_place: str):
         return "No location found from_location for {}, Please regenerate the location name".format(from_place)
     
     to_poi = search_nearby(to_place)
+    if to_poi is None:
+        return "No location found to_place for {}, Please regenerate the  to_place location name".format(to_place)
     to_location = get_location_x_y(to_poi["name"])
     if to_location is None:
-        print("No location found for {}, Please regenerate the location name".format(to_poi["name"]))
+        print("No location found for {}".format(to_poi["name"]))
         to_location = get_location_x_y(to_poi['address'])
         if to_location is None:
-            print("No location found for {}, Please regenerate the location name".format(to_poi["address"]))
-            return None
+            print("No location found for {}".format(to_poi["address"]))
+            return "No location found to_location for {}, Please regenerate the location name".format(to_place)
 
             
 
