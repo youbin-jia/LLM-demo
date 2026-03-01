@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>飞书文档AI助手</title>
+    <!-- Tailwind CSS v3 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- 统一的 Tailwind 配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#007AFF',
+                        secondary: '#5856D6',
+                        success: '#34C759',
+                        warning: '#FF9500',
+                        danger: '#FF3B30',
+                        light: '#F2F2F7',
+                        dark: '#1C1C1E',
+                        'primary-light': '#E5F1FF',
+                        'primary-dark': '#0051D5',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'card': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                        'card-hover': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .glass-effect {
+                background: rgba(255, 255, 255, 0.7);
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+            }
+            .btn-primary {
+                @apply bg-primary text-white font-medium py-3 px-6 rounded-xl shadow-md hover:bg-primary-dark transition-all duration-300 transform hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-50;
+            }
+            .btn-secondary {
+                @apply bg-white text-primary font-medium py-3 px-6 rounded-xl shadow-md border border-primary hover:bg-primary-light transition-all duration-300 transform hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-50;
+            }
+            .btn-feature {
+                @apply flex items-center justify-center gap-3 bg-white text-primary font-medium py-4 px-6 rounded-xl shadow-md border border-gray-200 hover:bg-primary-light transition-all duration-300 transform hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-50;
+            }
+            .btn-feature.active {
+                @apply bg-primary text-white border-primary;
+            }
+            .input-primary {
+                @apply w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-300;
+            }
+            .sidebar {
+                @apply w-72 bg-white shadow-lg rounded-2xl p-5 flex flex-col gap-4 h-full;
+            }
+            .main-content {
+                @apply flex-1 bg-gray-50 rounded-2xl p-6 overflow-y-auto;
+            }
+            .document-editor {
+                @apply bg-white rounded-xl shadow-md p-6 min-h-[500px] border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary transition-all duration-300;
+            }
+            .tooltip {
+                @apply invisible absolute bg-dark text-white text-xs rounded py-1 px-2 -mt-8 opacity-0 transition-opacity duration-300;
+            }
+            .has-tooltip:hover .tooltip {
+                @apply visible opacity-100 z-50;
+            }
+            .loading-dots span {
+                @apply inline-block w-2 h-2 bg-primary rounded-full mx-0.5 animate-pulse-slow;
+            }
+            .loading-dots span:nth-child(2) {
+                @apply animate-pulse-slow delay-150;
+            }
+            .loading-dots span:nth-child(3) {
+                @apply animate-pulse-slow delay-300;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans">
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <!-- 顶部导航栏 -->
+        <header class="flex justify-between items-center mb-6">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white">
+                    <i class="fa fa-paper-plane-o text-xl"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-gray-800">飞书文档</h1>
+            </div>
+            <div class="flex items-center gap-4">
+                <button class="btn-secondary">
+                    <i class="fa fa-share-alt mr-2"></i>分享
+                </button>
+                <button class="btn-primary">
+                    <i class="fa fa-save mr-2"></i>保存
+                </button>
+                <div class="w-10 h-10 rounded-full bg-gray-300 overflow-hidden">
+                    <img src="https://p3-doubao-search-sign.byteimg.com/labis/56da99f6c8afb942f02ca4174fddf23b~tplv-be4g95zd3a-image.jpeg?lk3s=feb11e32&x-expires=1787932974&x-signature=mIQ8TIF%2FeuJZHrolLC%2Be9E80GyE%3D" alt="用户头像" class="w-full h-full object-cover">
+                </div>
+            </div>
+        </header>
+
+        <!-- 主要内容区域 -->
+        <main class="flex gap-6 h-[calc(100vh-180px)]">
+            <!-- 左侧文档编辑区 -->
+            <div class="main-content">
+                <div class="mb-6">
+                    <input type="text" placeholder="文档标题" class="text-2xl font-bold border-none border-b-2 border-gray-300 focus:border-primary focus:outline-none pb-2 w-full mb-4">
+                    <div class="flex items-center text-sm text-gray-500 gap-4">
+                        <span><i class="fa fa-user-o mr-1"></i> 张三</span>
+                        <span><i class="fa fa-clock-o mr-1"></i> 刚刚编辑</span>
+                        <span><i class="fa fa-eye mr-1"></i> 12人查看</span>
+                    </div>
+                </div>
+                <div id="document-editor" class="document-editor" contenteditable="true">
+                    <p>开始编写文档内容...</p>
+                    <p><br></p>
+                    <p>在这里输入的内容可以通过AI助手进行增强和优化。</p>
+                    <p><br></p>
+                    <p>试试选中文本，然后使用右侧的AI助手功能！</p>
+                </div>
+            </div>
+
+            <!-- 右侧AI助手面板 -->
+            <div class="sidebar">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-xl font-bold text-gray-800">AI助手</h2>
+                    <button class="text-gray-500 hover:text-primary transition-colors">
+                        <i class="fa fa-cog"></i>
+                    </button>
+                </div>
+
+                <!-- 功能按钮 -->
+                <div class="flex flex-col gap-3 mb-6">
+                    <button id="btn-generate" class="btn-feature active" onclick="switchFeature('generate')">
+                        <i class="fa fa-pencil text-xl"></i>
+                        <span>文本生成</span>
+                    </button>
+                    <button id="btn-extract" class="btn-feature" onclick="switchFeature('extract')">
+                        <i class="fa fa-filter text-xl"></i>
+                        <span>信息提取</span>
+                    </button>
+                    <button id="btn-translate" class="btn-feature" onclick="switchFeature('translate')">
+                        <i class="fa fa-language text-xl"></i>
+                        <span>多语言翻译</span>
+                    </button>
+                    <button id="btn-format" class="btn-feature" onclick="switchFeature('format')">
+                        <i class="fa fa-magic text-xl"></i>
+                        <span>格式优化</span>
+                    </button>
+                </div>
+
+                <!-- 功能内容区域 -->
+                <div class="flex-1">
+                    <!-- 文本生成功能 -->
+                    <div id="feature-generate" class="feature-content">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-3">文本生成</h3>
+                        <p class="text-sm text-gray-600 mb-4">根据提示生成文档内容，支持多种类型的文本创作。</p>
+                        
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">选择生成类型</label>
+                            <select class="input-primary">
+                                <option>总结</option>
+                                <option>大纲</option>
+                                <option>邮件</option>
+                                <option>报告</option>
+                                <option>创意文案</option>
+                                <option>其他</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">输入提示</label>
+                            <textarea class="input-primary" rows="4" placeholder="请输入你想要生成的内容提示..."></textarea>
+                        </div>
+                        
+                        <button id="generate-btn" class="btn-primary w-full" onclick="generateContent()">
+                            <i class="fa fa-magic mr-2"></i>生成内容
+                        </button>
+                    </div>
+
+                    <!-- 信息提取功能 -->
+                    <div id="feature-extract" class="feature-content hidden">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-3">信息提取</h3>
+                        <p class="text-sm text-gray-600 mb-4">从选中的文本中提取关键信息和要点。</p>
+                        
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">提取类型</label>
+                            <select class="input-primary">
+                                <option>关键要点</option>
+                                <option>实体识别</option>
+                                <option>时间线</option>
+                                <option>数据统计</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <p class="text-sm text-gray-500 mb-2">已选中的文本</p>
+                            <div class="bg-gray-100 p-3 rounded-lg text-sm text-gray-700 max-h-32 overflow-y-auto">
+                                请在文档中选择要提取信息的文本...
+                            </div>
+                        </div>
+                        
+                        <button class="btn-primary w-full" onclick="extractContent()">
+                            <i class="fa fa-filter mr-2"></i>提取信息
+                        </button>
+                    </div>
+
+                    <!-- 翻译功能 -->
+                    <div id="feature-translate" class="feature-content hidden">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-3">多语言翻译</h3>
+                        <p class="text-sm text-gray-600 mb-4">将选中的文本翻译成其他语言。</p>
+                        
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">目标语言</label>
+                            <select class="input-primary">
+                                <option>中文</option>
+                                <option>英语</option>
+                                <option>日语</option>
+                                <option>韩语</option>
+                                <option>法语</option>
+                                <option>德语</option>
+                                <option>西班牙语</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <p class="text-sm text-gray-500 mb-2">已选中的文本</p>
+                            <div class="bg-gray-100 p-3 rounded-lg text-sm text-gray-700 max-h-32 overflow-y-auto">
+                                请在文档中选择要翻译的文本...
+                            </div>
+                        </div>
+                        
+                        <button class="btn-primary w-full" onclick="translateContent()">
+                            <i class="fa fa-language mr-2"></i>开始翻译
+                        </button>
+                    </div>
+
+                    <!-- 格式优化功能 -->
+                    <div id="feature-format" class="feature-content hidden">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-3">格式优化</h3>
+                        <p class="text-sm text-gray-600 mb-4">自动优化文档格式，提升专业性和可读性。</p>
+                        
+                        <div class="space-y-3 mb-4">
+                            <div class="flex items-center">
+                                <input type="checkbox" id="format-heading" class="mr-2" checked>
+                                <label for="format-heading" class="text-sm text-gray-700">优化标题层级</label>
+                            </div>
+                            <div class="flex items-center">
+                                <input type="checkbox" id="format-paragraph" class="mr-2" checked>
+                                <label for="format-paragraph" class="text-sm text-gray-700">调整段落结构</label>
+                            </div>
+                            <div class="flex items-center">
+                                <input type="checkbox" id="format-bullet" class="mr-2" checked>
+                                <label for="format-bullet" class="text-sm text-gray-700">添加项目符号</label>
+                            </div>
+                            <div class="flex items-center">
+                                <input type="checkbox" id="format-style" class="mr-2">
+                                <label for="format-style" class="text-sm text-gray-700">统一文字样式</label>
+                            </div>
+                        </div>
+                        
+                        <button class="btn-primary w-full" onclick="formatContent()">
+                            <i class="fa fa-magic mr-2"></i>优化格式
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 底部操作区 -->
+                <div class="mt-6 pt-4 border-t border-gray-200">
+                    <button class="text-sm text-gray-500 hover:text-primary transition-colors flex items-center gap-1">
+                        <i class="fa fa-question-circle"></i>
+                        <span>使用帮助</span>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 结果弹窗 -->
+    <div id="result-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="modal-title" class="text-xl font-bold text-gray-800">AI生成结果</h3>
+                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div id="modal-content" class="prose max-w-none">
+                <!-- 结果内容将在这里动态插入 -->
+            </div>
+            <div class="mt-6 flex gap-3">
+                <button onclick="closeModal()" class="btn-secondary flex-1">取消</button>
+                <button onclick="applyChanges()" class="btn-primary flex-1">应用到文档</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加载中弹窗 -->
+    <div id="loading-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-2xl p-8 w-full max-w-md flex flex-col items-center">
+            <div class="w-16 h-16 rounded-full bg-primary-light flex items-center justify-center mb-4">
+                <div class="loading-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+            <h3 id="loading-title" class="text-lg font-semibold text-gray-800 mb-2">AI正在处理</h3>
+            <p id="loading-message" class="text-gray-600 text-center">请稍候，AI正在生成内容...</p>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let currentFeature = 'generate';
+        let selectedText = '';
+        let aiResults = '';
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 监听文本选择事件
+            document.getElementById('document-editor').addEventListener('mouseup', function() {
+                selectedText = window.getSelection().toString().trim();
+                if (selectedText) {
+                    updateSelectedTextDisplay();
+                }
+            });
+        });
+
+        // 切换功能面板
+        function switchFeature(feature) {
+            // 更新当前功能
+            currentFeature = feature;
+            
+            // 更新按钮状态
+            document.querySelectorAll('.btn-feature').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(`btn-${feature}`).classList.add('active');
+            
+            // 显示对应功能内容
+            document.querySelectorAll('.feature-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            document.getElementById(`feature-${feature}`).classList.remove('hidden');
+            
+            // 更新选中的文本显示
+            updateSelectedTextDisplay();
+        }
+
+        // 更新选中的文本显示
+        function updateSelectedTextDisplay() {
+            const textDisplays = document.querySelectorAll('.feature-content .bg-gray-100');
+            textDisplays.forEach(display => {
+                if (selectedText) {
+                    display.textContent = selectedText.length > 100 ? selectedText.substring(0, 100) + '...' : selectedText;
+                } else {
+                    display.textContent = '请在文档中选择要处理的文本...';
+                }
+            });
+        }
+
+        // 显示加载弹窗
+        function showLoadingModal(title, message) {
+            document.getElementById('loading-title').textContent = title || 'AI正在处理';
+            document.getElementById('loading-message').textContent = message || '请稍候，AI正在生成内容...';
+            document.getElementById('loading-modal').classList.remove('hidden');
+        }
+
+        // 隐藏加载弹窗
+        function hideLoadingModal() {
+            document.getElementById('loading-modal').classList.add('hidden');
+        }
+
+        // 显示结果弹窗
+        function showResultModal(title, content) {
+            document.getElementById('modal-title').textContent = title || 'AI生成结果';
+            document.getElementById('modal-content').innerHTML = content;
+            document.getElementById('result-modal').classList.remove('hidden');
+            aiResults = content;
+        }
+
+        // 关闭结果弹窗
+        function closeModal() {
+            document.getElementById('result-modal').classList.add('hidden');
+        }
+
+        // 应用更改到文档
+        function applyChanges() {
+            const editor = document.getElementById('document-editor');
+            
+            // 如果有选中文本，替换选中的文本
+            if (selectedText) {
+                const selection = window.getSelection();
+                if (selection.rangeCount > 0) {
+                    const range = selection.getRangeAt(0);
+                    range.deleteContents();
+                    
+                    // 创建一个临时div来解析HTML内容
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = aiResults;
+                    
+                    // 将解析后的内容添加到文档中
+                    while (tempDiv.firstChild) {
+                        range.insertNode(tempDiv.firstChild);
+                    }
+                    
+                    selection.removeAllRanges();
+                }
+            } else {
+                // 否则在光标位置插入内容
+                const selection = window.getSelection();
+                if (selection.rangeCount > 0) {
+                    const range = selection.getRangeAt(0);
+                    
+                    // 创建一个临时div来解析HTML内容
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = aiResults;
+                    
+                    // 将解析后的内容添加到文档中
+                    while (tempDiv.firstChild) {
+                        range.insertNode(tempDiv.firstChild);
+                    }
+                    
+                    selection.removeAllRanges();
+                }
+            }
+            
+            closeModal();
+        }
+
+        // 文本生成功能
+        function generateContent() {
+            const prompt = document.querySelector('#feature-generate textarea').value.trim();
+            const type = document.querySelector('#feature-generate select').value;
+            
+            if (!prompt) {
+                alert('请输入生成提示');
+                return;
+            }
+            
+            showLoadingModal('文本生成中', `正在生成${type}内容，请稍候...`);
+            
+            // 模拟API调用延迟
+            setTimeout(() => {
+                let result = '';
+                
+                // 根据不同类型生成不同的内容
+                switch (type) {
+                    case '总结':
+                        result = `<h3>文档总结</h3>
+                        <p>根据您提供的提示，以下是文档的主要内容总结：</p>
+                        <ul>
+                            <li>这是一个关于飞书文档AI助手的使用指南</li>
+                            <li>AI助手提供了文本生成、信息提取、翻译和格式优化功能</li>
+                            <li>用户可以通过选择文本或输入提示来使用AI功能</li>
+                            <li>生成的内容可以直接应用到文档中</li>
+                        </ul>
+                        <p>总结完毕，希望对您有所帮助！</p>`;
+                        break;
+                    case '大纲':
+                        result = `<h3>文档大纲</h3>
+                        <ol>
+                            <li>
+                                <strong>飞书文档AI助手介绍</strong>
+                                <ul>
+                                    <li>什么是AI助手</li>
+                                    <li>AI助手的主要功能</li>
+                                    <li>如何访问AI助手</li>
+                                </ul>
+                            </li>
+                            <li>
+                                <strong>文本生成功能</strong>
+                                <ul>
+                                    <li>生成类型介绍</li>
+                                    <li>如何编写有效的提示</li>
+                                    <li>生成结果的应用</li>
+                                </ul>
+                            </li>
+                            <li>
+                                <strong>信息提取功能</strong>
+                                <ul>
+                                    <li>提取类型说明</li>
+                                    <li>选择文本的技巧</li>
+                                    <li>提取结果的使用</li>
+                                </ul>
+                            </li>
+                            <li>
+                                <strong>翻译功能</strong>
+                                <ul>
+                                    <li>支持的语言</li>
+                                    <li>翻译质量保证</li>
+                                    <li>批量翻译技巧</li>
+                                </ul>
+                            </li>
+                            <li>
+                                <strong>格式优化功能</strong>
+                                <ul>
+                                    <li>格式优化选项</li>
+                                    <li>自定义格式设置</li>
+                                    <li>格式模板的使用</li>
+                                </ul>
+                            </li>
+                        </ol>`;
+                        break;
+                    case '邮件':
+                        result = `<h3>商务邮件</h3>
+                        <p>主题：关于飞书文档AI助手功能培训的邀请</p>
+                        <p>尊敬的团队成员：</p>
+                        <p>希望这封邮件找到您一切安好。</p>
+                        <p>我很高兴地通知大家，我们将在下周举办一场关于飞书文档AI助手功能的培训会议。这个强大的工具可以帮助我们显著提高文档创作和编辑效率。</p>
+                        <p><strong>培训详情：</strong></p>
+                        <ul>
+                            <li>日期：2023年7月15日（星期五）</li>
+                            <li>时间：下午2:00-3:30</li>
+                            <li>地点：线上会议室（会议链接将另行发送）</li>
+                            <li>内容：AI助手功能介绍、实际操作演示、问答环节</li>
+                        </ul>
+                        <p>请各位提前安排好工作，准时参加。培训结束后，我们将提供操作手册和常见问题解答文档。</p>
+                        <p>如有任何疑问，请随时与我联系。</p>
+                        <p>期待与大家共同学习和进步！</p>
+                        <p>此致</p>
+                        <p>敬礼</p>
+                        <p>张三<br>团队负责人</p>`;
+                        break;
+                    case '报告':
+                        result = `<h3>月度工作报告</h3>
+                        <h4>2023年6月</h4>
+                        <p><strong>一、工作概述</strong></p>
+                        <p>本月主要完成了以下工作内容：</p>
+                        <ul>
+                            <li>完成了项目A的需求分析和设计文档编写</li>
+                            <li>参与了项目B的开发和测试工作</li>
+                            <li>组织了团队内部的技术分享会议</li>
+                            <li>优化了工作流程，提高了团队协作效率</li>
+                        </ul>
+                        <p><strong>二、工作成果</strong></p>
+                        <ul>
+                            <li>项目A的设计文档已通过评审，获得了客户的认可</li>
+                            <li>项目B的开发进度符合计划，测试通过率达到95%以上</li>
+                            <li>技术分享会议获得了团队成员的积极反馈，参与度达到100%</li>
+                            <li>工作流程优化后，团队协作效率提升了约20%</li>
+                        </ul>
+                        <p><strong>三、存在的问题</strong></p>
+                        <ul>
+                            <li>项目A的需求变更较为频繁，影响了开发进度</li>
+                            <li>部分团队成员对新工具的使用还不够熟练</li>
+                        </ul>
+                        <p><strong>四、下月计划</strong></p>
+                        <ul>
+                            <li>开始项目A的开发工作</li>
+                            <li>完成项目B的收尾工作</li>
+                            <li>组织新工具的培训，提高团队成员的使用熟练度</li>
+                            <li>继续优化工作流程，进一步提高团队协作效率</li>
+                        </ul>
+                        <p><strong>五、建议</strong></p>
+                        <p>建议加强与客户的沟通，减少需求变更的频率；同时，定期组织技术培训，提高团队成员的技能水平。</p>`;
+                        break;
+                    case '创意文案':
+                        result = `<h3>产品宣传文案</h3>
+                        <p><strong>标题：飞书文档AI助手 - 让创作更智能，让工作更高效</strong></p>
+                        <p>在这个信息爆炸的时代，我们每天都需要处理大量的文档工作。从会议记录到项目报告，从产品说明到营销方案，文档无处不在。</p>
+                        <p>但是，你是否曾经遇到过这样的困扰？</p>
+                        <ul>
+                            <li>面对空白文档，不知从何下笔？</li>
+                            <li>冗长的会议记录，难以提取关键信息？</li>
+                            <li>需要将文档翻译成多种语言，却苦于语言障碍？</li>
+                            <li>文档格式混乱，影响专业形象？</li>
+                        </ul>
+                        <p>现在，飞书文档AI助手来了！它将彻底改变你的文档创作体验。</p>
+                        <p><strong>文本生成：</strong>只需输入简单提示，AI助手就能为你生成高质量的文档内容。无论是总结、大纲、邮件还是报告，都能轻松搞定。</p>
+                        <p><strong>信息提取：</strong>选中任意文本，AI助手能快速提取关键信息、识别实体、梳理时间线或统计数据，让重要信息一目了然。</p>
+                        <p><strong>多语言翻译：</strong>支持多种语言互译，翻译质量高，保持原文风格，让你的文档轻松跨越语言障碍。</p>
+                        <p><strong>格式优化：</strong>一键优化文档格式，自动调整标题层级、段落结构，添加项目符号，让你的文档更专业、更易读。</p>
+                        <p>飞书文档AI助手，不只是一个工具，更是你的智能创作伙伴。它理解你的需求，提升你的效率，让你专注于更有价值的工作。</p>
+                        <p>立即体验飞书文档AI助手，让智能科技为你的工作赋能！</p>
+                        <p><em>"飞书文档AI助手，让每一个想法都能完美呈现。"</em></p>`;
+                        break;
+                    default:
+                        result = `<h3>AI生成内容</h3>
+                        <p>根据您的提示，AI助手生成了以下内容：</p>
+                        <p>${prompt}</p>
+                        <p>这是一个示例内容。在实际使用中，AI助手会根据您提供的更详细的提示生成更丰富、更有针对性的内容。</p>
+                        <p>您可以通过以下方式优化生成结果：</p>
+                        <ul>
+                            <li>提供更具体、更详细的提示</li>
+                            <li>明确指定您希望的内容类型和格式</li>
+                            <li>提供一些示例或参考资料</li>
+                        </ul>
+                        <p>希望这个功能对您有所帮助！</p>`;
+                }
+                
+                hideLoadingModal();
+                showResultModal(`AI生成${type}结果`, result);
+            }, 2000);
+        }
+
+        // 信息提取功能
+        function extractContent() {
+            if (!selectedText) {
+                alert('请先在文档中选择要提取信息的文本');
+                return;
+            }
+            
+            const extractType = document.querySelector('#feature-extract select').value;
+            
+            showLoadingModal('信息提取中', `正在提取${extractType}，请稍候...`);
+            
+            // 模拟API调用延迟
+            setTimeout(() => {
+                let result = '';
+                
+                // 根据不同提取类型生成不同的结果
+                switch (extractType) {
+                    case '关键要点':
+                        result = `<h3>提取的关键要点</h3>
+                        <ul class="list-disc pl-5 space-y-2">
+                            <li>飞书文档AI助手的主要功能介绍</li>
+                            <li>AI助手可以提高文档创作和编辑效率</li>
+                            <li>用户可以通过选择文本或输入提示使用AI功能</li>
+                            <li>生成的内容可以直接应用到文档中</li>
+                            <li>AI助手支持多种语言和多种文档格式</li>
+                        </ul>`;
+                        break;
+                    case '实体识别':
+                        result = `<h3>识别的实体</h3>
+                        <div class="space-y-3">
+                            <div class="p-3 bg-blue-50 rounded-lg">
+                                <p class="font-semibold">产品名称</p>
+                                <p>飞书文档AI助手</p>
+                            </div>
+                            <div class="p-3 bg-green-50 rounded-lg">
+                                <p class="font-semibold">功能</p>
+                                <p>文本生成、信息提取、翻译、格式优化</p>
+                            </div>
+                            <div class="p-3 bg-yellow-50 rounded-lg">
+                                <p class="font-semibold">使用方式</p>
+                                <p>选择文本、输入提示</p>
+                            </div>
+                        </div>`;
+                        break;
+                    case '时间线':
+                        result = `<h3>提取的时间线</h3>
+                        <div class="relative border-l-2 border-primary pl-6 ml-3 space-y-6">
+                            <div class="relative">
+                                <div class="absolute -left-[25px] w-4 h-4 rounded-full bg-primary"></div>
+                                <p class="font-semibold">开始使用</p>
+                                <p>用户打开飞书文档，开始编写内容</p>
+                            </div>
+                            <div class="relative">
+                                <div class="absolute -left-[25px] w-4 h-4 rounded-full bg-primary"></div>
+                                <p class="font-semibold">选择文本</p>
+                                <p>用户在文档中选择需要处理的文本</p>
+                            </div>
+                            <div class="relative">
+                                <div class="absolute -left-[25px] w-4 h-4 rounded-full bg-primary"></div>
+                                <p class="font-semibold">使用AI功能</p>
+                                <p>用户点击AI助手面板中的功能按钮</p>
+                            </div>
+                            <div class="relative">
+                                <div class="absolute -left-[25px] w-4 h-4 rounded-full bg-primary"></div>
+                                <p class="font-semibold">获取结果</p>
+                                <p>AI助手处理文本并生成结果</p>
+                            </div>
+                            <div class="relative">
+                                <div class="absolute -left-[25px] w-4 h-4 rounded-full bg-primary"></div>
+                                <p class="font-semibold">应用到文档</p>
+                                <p>用户将AI生成的内容应用到文档中</p>
+                            </div>
+                        </div>`;
+                        break;
+                    case '数据统计':
+                        result = `<h3>提取的数据统计</h3>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full bg-white rounded-lg overflow-hidden">
+                                <thead class="bg-gray-100">
+                                    <tr>
+                                        <th class="py-3 px-4 text-left">统计项</th>
+                                        <th class="py-3 px-4 text-left">数值</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-200">
+                                    <tr>
+                                        <td class="py-3 px-4">总字数</td>
+                                        <td class="py-3 px-4 font-semibold">128</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="py-3 px-4">段落数</td>
+                                        <td class="py-3 px-4 font-semibold">4</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="py-3 px-4">句子数</td>
+                                        <td class="py-3 px-4 font-semibold">6</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="py-3 px-4">平均词长</td>
+                                        <td class="py-3 px-4 font-semibold">2.8</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="py-3 px-4">关键词数</td>
+                                        <td class="py-3 px-4 font-semibold">8</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>`;
+                        break;
+                }
+                
+                hideLoadingModal();
+                showResultModal(`提取的${extractType}`, result);
+            }, 2000);
+        }
+
+        // 翻译功能
+        function translateContent() {
+            if (!selectedText) {
+                alert('请先在文档中选择要翻译的文本');
+                return;
+            }
+            
+            const targetLanguage = document.querySelector('#feature-translate select').value;
+            
+            showLoadingModal('翻译中', `正在将文本翻译成${targetLanguage}，请稍候...`);
+            
+            // 模拟API调用延迟
+            setTimeout(() => {
+                let result = '';
+                
+                // 根据不同目标语言生成不同的翻译结果
+                switch (targetLanguage) {
+                    case '英语':
+                        result = `<h3>English Translation</h3>
+                        <p>Start writing document content...</p>
+                        <p><br></p>
+                        <p>The content entered here can be enhanced and optimized through the AI assistant.</p>
+                        <p><br></p>
+                        <p>Try selecting text and then using the AI assistant features on the right!</p>`;
+                        break;
+                    case '日语':
+                        result = `<h3>日本語翻訳</h3>
+                        <p>ドキュメントの内容を入力し始めます...</p>
+                        <p><br></p>
+                        <p>ここに入力されたコンテンツは、AIアシスタントによって強化・最適化することができます。</p>
+                        <p><br></p>
+                        <p>テキストを選択して、右側のAIアシスタント機能を使用してみてください！</p>`;
+                        break;
+                    case '韩语':
+                        result = `<h3>한국어 번역</h3>
+                        <p>문서 내용 작성을 시작합니다...</p>
+                        <p><br></p>
+                        <p>여기에 입력된 내용은 AI 어시스턴트를 통해 강화되고 최적화될 수 있습니다.</p>
+                        <p><br></p>
+                        <p>텍스트를 선택하고 오른쪽의 AI 어시스턴트 기능을 사용해 보세요!</p>`;
+                        break;
+                    case '法语':
+                        result = `<h3>Traduction française</h3>
+                        <p>Commencez à écrire le contenu du document...</p>
+                        <p><br></p>
+                        <p>Le contenu saisi ici peut être amélioré et optimisé par l'assistant IA.</p>
+                        <p><br></p>
+                        <p>Essayez de sélectionner du texte, puis utilisez les fonctionnalités de l'assistant IA sur la droite !</p>`;
+                        break;
+                    case '德语':
+                        result = `<h3>Deutsche Übersetzung</h3>
+                        <p>Beginne mit dem Schreiben von Dokumentinhalt...</p>
+                        <p><br></p>
+                        <p>Der hier eingegebene Inhalt kann durch den KI-Assistenten verbessert und optimiert werden.</p>
+                        <p><br></p>
+                        <p>Versuche, Text auszuwählen, und verwende dann die KI-Assistenten-Funktionen auf der rechten Seite!</p>`;
+                        break;
+                    case '西班牙语':
+                        result = `<h3>Traducción española</h3>
+                        <p>Comience a escribir el contenido del documento...</p>
+                        <p><br></p>
+                        <p>El contenido ingresado aquí puede ser mejorado y optimizado mediante el asistente de IA.</p>
+                        <p><br></p>
+                        <p>¡Pruebe a seleccionar texto y luego use las funciones del asistente de IA en el lado derecho!</p>`;
+                        break;
+                    default:
+                        result = `<h3>中文翻译</h3>
+                        <p>开始编写文档内容...</p>
+                        <p><br></p>
+                        <p>在这里输入的内容可以通过AI助手进行增强和优化。</p>
+                        <p><br></p>
+                        <p>试试选中文本，然后使用右侧的AI助手功能！</p>`;
+                }
+                
+                hideLoadingModal();
+                showResultModal(`翻译成${targetLanguage}的结果`, result);
+            }, 2000);
+        }
+
+        // 格式优化功能
+        function formatContent() {
+            const optimizeHeading = document.getElementById('format-heading').checked;
+            const optimizeParagraph = document.getElementById('format-paragraph').checked;
+            const addBullet = document.getElementById('format-bullet').checked;
+            const unifyStyle = document.getElementById('format-style').checked;
+            
+            if (!optimizeHeading && !optimizeParagraph && !addBullet && !unifyStyle) {
+                alert('请至少选择一项格式优化选项');
+                return;
+            }
+            
+            showLoadingModal('格式优化中', '正在优化文档格式，请稍候...');
+            
+            // 模拟API调用延迟
+            setTimeout(() => {
+                let result = `<h3>格式优化结果</h3>
+                <p>根据您的选择，AI助手对文档进行了以下优化：</p>
+                <ul class="list-disc pl-5 space-y-2">`;
+                
+                if (optimizeHeading) {
+                    result += `<li>优化了标题层级结构，使文档层次更清晰</li>`;
+                }
+                
+                if (optimizeParagraph) {
+                    result += `<li>调整了段落结构，改进了内容的组织方式</li>`;
+                }
+                
+                if (addBullet) {
+                    result += `<li>添加了项目符号，提高了内容的可读性</li>`;
+                }
+                
+                if (unifyStyle) {
+                    result += `<li>统一了文字样式，使文档看起来更专业</li>`;
+                }
+                
+                result += `</ul>
+                <div class="mt-6 p-4 bg-primary-light rounded-lg">
+                    <h4 class="font-semibold text-primary mb-2">优化后的文档内容</h4>
+                    <div class="prose max-w-none">
+                        <h2>飞书文档AI助手使用指南</h2>
+                        <p>欢迎使用飞书文档AI助手！本指南将帮助您了解如何使用AI助手的各项功能，提高文档创作和编辑效率。</p>
+                        
+                        <h3>主要功能</h3>
+                        <ul>
+                            <li><strong>文本生成</strong>：根据提示生成文档内容，支持多种类型的文本创作</li>
+                            <li><strong>信息提取</strong>：从选中的文本中提取关键信息和要点</li>
+                            <li><strong>多语言翻译</strong>：将选中的文本翻译成其他语言</li>
+                            <li><strong>格式优化</strong>：自动优化文档格式，提升专业性和可读性</li>
+                        </ul>
+                        
+                        <h3>使用方法</h3>
+                        <ol>
+                            <li>在文档中选择需要处理的文本，或在AI助手面板中输入提示</li>
+                            <li>点击AI助手面板中的相应功能按钮</li>
+                            <li>等待AI助手处理完成，查看生成的结果</li>
+                            <li>点击"应用到文档"按钮，将结果应用到文档中</li>
+                        </ol>
+                        
+                        <h3>最佳实践</h3>
+                        <ul>
+                            <li>提供清晰、具体的提示，以获得更准确的生成结果</li>
+                            <li>选择适当长度的文本进行处理，过长或过短都可能影响效果</li>
+                            <li>根据需要调整生成的结果，使其更符合您的要求</li>
+                            <li>定期保存文档，避免意外情况导致内容丢失</li>
+                        </ul>
+                    </div>
+                </div>`;
+                
+                hideLoadingModal();
+                showResultModal('格式优化结果', result);
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
